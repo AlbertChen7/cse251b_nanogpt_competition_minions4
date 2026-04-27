@@ -110,7 +110,14 @@ class nanoGPTConfig:
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
     
-MODEL_CONFIG = nanoGPTConfig(block_size=1024, n_embd=576, vocab_size=50257)
+MODEL_CONFIG = nanoGPTConfig(
+    block_size=256, 
+    vocab_size=50257, 
+    n_layer=6, 
+    n_head=6, 
+    n_embd=384, 
+    dropout=0.1, 
+    bias=False)
 
 class nanoGPT(nn.Module):
 

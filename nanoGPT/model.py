@@ -108,7 +108,7 @@ class Block(nn.Module):
 @dataclass
 class GPTConfig:
     block_size: int = 1024
-    vocab_size: int = 50304 # GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
+    vocab_size: int = 50304
     n_layer: int = 12
     n_head: int = 12
     n_embd: int = 768
@@ -330,3 +330,48 @@ class GPT(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1)
 
         return idx
+
+MODEL_CONFIG = GPTConfig(
+    block_size=256, 
+    vocab_size=50257, 
+    n_layer=6, 
+    n_head=6, 
+    n_embd=384, 
+    dropout=0.1, 
+    bias=False)
+
+def load_model(checkpoint_path: str, device: str = "cuda") -> torch.nn.Module:
+    """
+    Load your trained model from a checkpoint.
+
+    This function is called by evaluate.py. It must return a model where:
+        model(input_ids) -> logits
+        - input_ids: LongTensor of shape (batch, seq_len)
+        - logits: FloatTensor of shape (batch, seq_len, 50257)
+
+    Args:
+        checkpoint_path: Path to your checkpoint.pt file
+        device: Device to load onto ("cuda" or "cpu")
+
+    Returns:
+        model: nn.Module in eval mode
+    """
+    # Load checkpoint
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=True)
+
+    # If you save config alongside weights, load it:
+    # config = checkpoint["config"]
+    # model = GPT(**config)
+    # model.load_state_dict(checkpoint["model_state_dict"])
+
+    # Simple case: checkpoint is just the state_dict
+    model = GPT(config=MODEL_CONFIG)  # Use your config here
+    state_dict = checkpoint['model']
+    # Slice the token embeddings and the output head to vocab size 50257
+    state_dict['transformer.wte.weight'] = state_dict['transformer.wte.weight'][:50257, :]
+    state_dict['lm_head.weight'] = state_dict['lm_head.weight'][:50257, :]
+    model.load_state_dict(state_dict)
+
+    model.to(device)
+    model.eval()
+    return model

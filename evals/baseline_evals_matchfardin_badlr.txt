@@ -1,0 +1,35 @@
+Trained on 100 shards (full FineWeb-Edu)
+(Kernel died after ~13000 iterations)
+
+Model Config:
+batch_size=8,
+block_size=1024, 
+vocab_size=50257, 
+n_layer=4, 
+n_head=4, 
+n_embd=512, 
+dropout=0.0, 
+bias=False
+
+Training/Optimization Config:
+learning_rate = 1e-3
+max_iters = 20000
+lr_decay_iters = 20000
+min_lr = 1e-4
+beta2 = 0.99
+gradient_accumulation_steps = 1
+
+--- Evaluating local model: nanoGPT/ ---
+Loading model from nanoGPT/checkpoint.pt...
+number of parameters: 38.32M
+Total parameters:       38,843,392
+Trainable parameters:   38,843,392
+Evaluating on val.bin (block_size=1024)...
+
+==================================================
+  Perplexity:          122.1105
+  Avg loss (nats):     4.804927
+  Tokens evaluated:    5,169,152
+  Total parameters:    38,843,392
+  Eval time:           60.5s
+==================================================

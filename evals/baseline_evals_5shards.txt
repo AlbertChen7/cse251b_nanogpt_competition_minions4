@@ -1,0 +1,26 @@
+Model trained on 5 shards of data, vocab size of 50304 (edited evaluate.py to work with it)
+
+--- Evaluating local model: nanoGPT/ ---
+Loading model from nanoGPT/checkpoint.pt...
+number of parameters: 29.94M
+Total parameters:       30,036,864
+Trainable parameters:   30,036,864
+Evaluating on val.bin (block_size=256)...
+
+Model Config:
+batch_size = 32
+block_size = 256
+vocab_size = 50304
+n_layer = 6
+n_head = 6
+n_embd = 384
+dropout = 0.1
+bias = False 
+
+==================================================
+  Perplexity:          118.3153
+  Avg loss (nats):     4.773353
+  Tokens evaluated:    5,169,152
+  Total parameters:    30,036,864
+  Eval time:           1555.5s
+==================================================

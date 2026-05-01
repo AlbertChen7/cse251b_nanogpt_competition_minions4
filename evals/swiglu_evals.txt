@@ -1,0 +1,27 @@
+Trained on 100 shards (full FineWeb-Edu)
+step 5000: train loss 4.6596, val loss 4.6464
+iter 5000: loss 4.8235, time 18155.61ms, mfu 7.48%
+
+# Model Configuration (Your "Small Baseline" Specs)
+batch_size = 32
+block_size = 256
+n_layer = 6
+n_head = 6
+n_embd = 384
+dropout = 0.1
+bias = False
+
+--- Evaluating local model: nanoGPT/ ---
+Loading model from nanoGPT/checkpoint.pt...
+number of parameters: 58.23M
+Total parameters:       58,330,368
+Trainable parameters:   58,330,368
+Evaluating on val.bin (block_size=256)...
+
+==================================================
+  Perplexity:          126.6559
+  Avg loss (nats):     4.841474
+  Tokens evaluated:    5,169,152
+  Total parameters:    58,330,368
+  Eval time:           139.6s
+==================================================

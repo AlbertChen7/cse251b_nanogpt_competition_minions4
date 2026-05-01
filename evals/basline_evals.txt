@@ -1,0 +1,46 @@
+step 20000: train loss 4.5245, val loss 4.5160
+iter 20000: loss 4.7033, time 40465.76ms, mfu 1.54%
+
+# Model Configuration (Your "Small Baseline" Specs)
+batch_size = 32 
+block_size = 256
+vocab_size = 50304, scaled down to 50257
+n_layer = 6
+n_head = 6
+n_embd = 384
+dropout = 0.1
+bias = False 
+
+--- Evaluating local model: nanoGPT/ ---
+Loading model from nanoGPT/checkpoint.pt...
+number of parameters: 29.92M
+Total parameters:       30,018,816
+Trainable parameters:   30,018,816
+Evaluating on val.bin (block_size=256)...
+
+==================================================
+  Perplexity:          106.1585
+  Avg loss (nats):     4.664934
+  Tokens evaluated:    5,169,152
+  Total parameters:    30,018,816
+  Eval time:           38.1s
+==================================================
+
+Avg loss (nats):     4.664934
+Tokens evaluated:    5,169,152
+Total parameters:    30,018,816
+Eval time:           38.1s
+Iterations: 20000
+
+Config:
+batch_size = 32 
+block_size = 256
+n_layer = 6
+n_head = 6
+n_embd = 384
+dropout = 0.1
+bias = False 
+
+Trained using original nanoGPT repo using train.py script on entire edu_fineweb10B dataset. Eval results from val.bin in group repo.
+
+Trained on datahub

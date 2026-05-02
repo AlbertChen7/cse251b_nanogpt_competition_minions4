@@ -1,3 +1,13 @@
+# nanogpt
+build-nanogpt/
+local/
+
+# DS Store
+.DS_Store
+
+# pyenv
+.python-version
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

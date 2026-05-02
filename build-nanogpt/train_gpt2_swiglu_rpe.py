@@ -15,13 +15,13 @@ from torch.backends.cuda import sdp_kernel  # imported for completeness
 
 DATA_ROOT = "edu_fineweb10B"
 
-TOTAL_BATCH_SIZE = 131072        # total batch size in number of tokens (2^17)
-MICRO_BATCH_SIZE = 32            # per-GPU micro batch size
+TOTAL_BATCH_SIZE = 524288        # total batch size in number of tokens (2^19)
+MICRO_BATCH_SIZE = 8            # per-GPU micro batch size
 SEQ_LEN = 1024                   # sequence length (block size)
 
 MAX_LR = 6e-4
 MIN_LR_FACTOR = 0.1              # min_lr = MAX_LR * MIN_LR_FACTOR
-WARMUP_STEPS = 750
+WARMUP_STEPS = 715
 MAX_STEPS = 19073                # ~1 epoch for 10B tokens with 0.5M token batch
 
 WEIGHT_DECAY = 0.1

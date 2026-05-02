@@ -1,0 +1,17 @@
+python evaluate.py --model_dir ./build-nanogpt --data val.bin
+CUDA not available, falling back to CPU.
+
+--- Evaluating local model: ./build-nanogpt ---
+Loading model from ./build-nanogpt/checkpoint.pt...
+Loading checkpoint from ./build-nanogpt/checkpoint.pt...
+Total parameters:       38,890,496
+Trainable parameters:   38,890,496
+Evaluating on val.bin (block_size=1024)...
+
+==================================================
+  Perplexity:          38.7579
+  Avg loss (nats):     3.657334
+  Tokens evaluated:    5,169,152
+  Total parameters:    38,890,496
+  Eval time:           329.9s
+==================================================

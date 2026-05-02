@@ -469,6 +469,8 @@ if __name__ == "__main__":
     # set up DDP (distributed data parallel).
     # torchrun command sets the env variables RANK, LOCAL_RANK, and WORLD_SIZE
     ddp = int(os.environ.get("RANK", -1)) != -1  # is this a ddp run?
+    import pdb
+    pdb.set_trace()
     if ddp:
         # use of DDP currently assumes CUDA, we set the device according to rank
         assert torch.cuda.is_available(), "DDP currently requires CUDA"

@@ -14,7 +14,7 @@ import tiktoken
 from datasets import load_dataset # pip install datasets
 from tqdm import tqdm # pip install tqdm
 from huggingface_hub import login
-login(token="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")
+login(token="HF TOKEN")
 
 # init the tokenizer
 enc = tiktoken.get_encoding("gpt2")

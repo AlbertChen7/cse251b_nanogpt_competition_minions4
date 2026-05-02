@@ -1,0 +1,6 @@
+# data files
+edu_fineweb10B*
+
+# out
+/log
+*.pt

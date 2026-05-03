@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from hellaswag import render_example, iterate_examples
+from muon import MuonWithAuxAdam
 
 # -----------------------------------------------------------------------------
 
@@ -308,7 +309,7 @@ class GPT(nn.Module):
 
         return model
 
-    def configure_optimizers(self, weight_decay, learning_rate, device_type):
+    def adam_optimizer(self, weight_decay, learning_rate, device_type):
         # start with all of the candidate parameters (that require grad)
         param_dict = {pn: p for pn, p in self.named_parameters()}
         param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
@@ -337,6 +338,32 @@ class GPT(nn.Module):
         optimizer = torch.optim.AdamW(
             optim_groups, lr=learning_rate, betas=(0.9, 0.95), eps=1e-8, fused=use_fused
         )
+        return optimizer
+
+    def configure_optimizers(self, weight_decay, learning_rate, device_type):
+        # start with all of the candidate parameters (that require grad)
+        param_dict = {pn: p for pn, p in self.named_parameters()}
+        param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
+        
+        # create optim groups for Muon optimizer
+        # hidden layer weights (2D+) use Muon, everything else uses AdamW
+        hidden_weights = [p for pn, p in param_dict.items() if p.dim() >= 2]
+        hidden_gains_biases = [p for pn, p in param_dict.items() if p.dim() < 2]
+        
+        optim_groups = [
+            {"params": hidden_weights, "use_muon": True, "lr": 0.02, "weight_decay": weight_decay},
+            {"params": hidden_gains_biases, "use_muon": False, "lr": learning_rate, "betas": (0.9, 0.95), "weight_decay": weight_decay},
+        ]
+        
+        num_hidden_params = sum(p.numel() for p in hidden_weights)
+        num_other_params = sum(p.numel() for p in hidden_gains_biases)
+        if master_process:
+            print(f"num hidden weight tensors: {len(hidden_weights)}, with {num_hidden_params:,} parameters")
+            print(f"num other parameter tensors: {len(hidden_gains_biases)}, with {num_other_params:,} parameters")
+            print("using Muon optimizer for hidden weights")
+        
+        optimizer = MuonWithAuxAdam(optim_groups)
+        
         return optimizer
 
 

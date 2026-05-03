@@ -1,3 +1,4 @@
+import argparse
 import os
 import math
 import time
@@ -50,23 +51,41 @@ class CausalSelfAttention(nn.Module):
         # output projection
         y = self.c_proj(y)
         return y
-
-
+    
 class MLP(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd)
-        self.gelu = nn.GELU(approximate="tanh")
-        self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd)
+        self.mlp_act = config.mlp_act
+
+        if config.mlp_act == "gelu":
+            self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd)
+            self.gelu = nn.GELU(approximate="tanh")
+            self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd)
+        elif config.mlp_act == "swiglu":
+            dim_hidden = int((8 / 3) * config.n_embd)
+            dim_hidden = 64 * ((dim_hidden + 63) // 64) 
+            self.c_fc = nn.Linear(config.n_embd, dim_hidden)
+            self.c_gate = nn.Linear(config.n_embd, dim_hidden)
+            self.c_proj = nn.Linear(dim_hidden, config.n_embd)
+        else:
+            raise ValueError(f"MLP activation not supported: {config.mlp_act}")
+        
         self.c_proj.NANOGPT_SCALE_INIT = 1
 
     def forward(self, x):
-        x = self.c_fc(x)
-        x = self.gelu(x)
-        x = self.c_proj(x)
-        return x
+        if self.mlp_act == "gelu":
+            x = self.c_fc(x)
+            x = self.gelu(x)
+            x = self.c_proj(x)
+            return x
 
+        elif self.mlp_act == "swiglu":
+            value = self.c_fc(x)
+            gate = self.c_gate(x)
+            x = F.silu(gate) * value
+            x = self.c_proj(x)
+            return x
 
 class Block(nn.Module):
 
@@ -82,17 +101,14 @@ class Block(nn.Module):
         x = x + self.mlp(self.ln_2(x))
         return x
 
-
 @dataclass
 class GPTConfig:
-    block_size: int = 1024  # max sequence length
-    vocab_size: int = (
-        50257  # number of tokens: 50,000 BPE merges + 256 bytes tokens + 1 <|endoftext|> token
-    )
-    n_layer: int = 4  # number of layers
-    n_head: int = 4  # number of heads
-    n_embd: int = 512  # embedding dimension
-
+    block_size: int = 1024 # max sequence length
+    vocab_size: int = 50257 # number of tokens: 50,000 BPE merges + 256 bytes tokens + 1 <|endoftext|> token
+    n_layer: int = 4 # number of layers
+    n_head: int = 4 # number of heads
+    n_embd: int = 512 # embedding dimension
+    mlp_act: str = "swiglu"
 
 class GPT(nn.Module):
 
@@ -325,7 +341,6 @@ def get_most_likely_row(tokens, mask, logits):
     pred_norm = avg_loss.argmin().item()
     return pred_norm
 
-
 # -----------------------------------------------------------------------------
 # simple launch:
 # python train_gpt2.py
@@ -338,6 +353,33 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.distributed as dist
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+
+    # model architecture
+    parser.add_argument("--mlp_act", type=str, default="gelu", choices=["gelu", "swiglu"])
+    parser.add_argument("--n_layer", type=int, default=4)
+    parser.add_argument("--n_head", type=int, default=4)
+    parser.add_argument("--n_embd", type=int, default=512)
+    parser.add_argument("--vocab_size", type=int, default=50304)
+
+    # training/data setup
+    parser.add_argument("--B", type=int, default=64, help="micro batch size")
+    parser.add_argument("--T", type=int, default=1024, help="sequence length / block size")
+    parser.add_argument("--total_batch_size", type=int, default=524288, help="total tokens per optimizer step")
+    parser.add_argument("--max_steps", type=int, default=19073)
+
+    # optimizer / schedule
+    parser.add_argument("--max_lr", type=float, default=6e-4)
+    parser.add_argument("--warmup_steps", type=int, default=715)
+    parser.add_argument("--weight_decay", type=float, default=0.1)
+
+    parser.add_argument("--skip_hellaswag", action="store_true")
+    parser.add_argument("--skip_generate", action="store_true")
+
+    # logging/checkpoints
+    parser.add_argument("--log_dir", type=str, default=None)
+
+    args = parser.parse_args()
     # set up DDP (distributed data parallel).
     # torchrun command sets the env variables RANK, LOCAL_RANK, and WORLD_SIZE
     ddp = int(os.environ.get("RANK", -1)) != -1  # is this a ddp run?
@@ -376,9 +418,9 @@ if __name__ == "__main__":
 
     enc = tiktoken.get_encoding("gpt2")
 
-    total_batch_size = 524288  # 2**19, ~0.5M, in number of tokens
-    B = 16  # micro batch size
-    T = 1024  # sequence length
+    total_batch_size = args.total_batch_size
+    B = args.B
+    T = args.T
     assert (
         total_batch_size % (B * T * ddp_world_size) == 0
     ), "make sure total_batch_size is divisible by B * T * ddp_world_size"
@@ -397,7 +439,14 @@ if __name__ == "__main__":
     torch.set_float32_matmul_precision("high")
 
     # create model
-    model = GPT(GPTConfig(vocab_size=50304))
+    model = GPT(GPTConfig(
+        vocab_size=args.vocab_size,
+        block_size=args.T,
+        n_layer=args.n_layer,
+        n_head=args.n_head,
+        n_embd=args.n_embd,
+        mlp_act=args.mlp_act,
+    ))
     # model = GPT.from_pretrained("gpt2") # or init from OpenAI GPT-2
     model.to(device)
     use_compile = (
@@ -411,41 +460,40 @@ if __name__ == "__main__":
         model.module if ddp else model
     )  # always contains the "raw" unwrapped model
 
-    max_lr = 6e-4
+    max_lr = args.max_lr
     min_lr = max_lr * 0.1
-    warmup_steps = 715
-    max_steps = 19073  # 19,073 steps is ~1 epoch, if data is 10B tokens and batch size 0.5M tokens
-
+    warmup_steps = args.warmup_steps
+    max_steps = args.max_steps # 19,073 steps is ~1 epoch, if data is 10B tokens and batch size 0.5M tokens
     def get_lr(it):
         # 1) linear warmup for warmup_iters steps
         if it < warmup_steps:
-            return max_lr * (it + 1) / warmup_steps
+            return max_lr * (it+1) / warmup_steps
         # 2) if it > lr_decay_iters, return min learning rate
         if it > max_steps:
             return min_lr
         # 3) in between, use cosine decay down to min learning rate
         decay_ratio = (it - warmup_steps) / (max_steps - warmup_steps)
         assert 0 <= decay_ratio <= 1
-        coeff = 0.5 * (
-            1.0 + math.cos(math.pi * decay_ratio)
-        )  # coeff starts at 1 and goes to 0
+        coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff starts at 1 and goes to 0
         return min_lr + coeff * (max_lr - min_lr)
 
     # optimize!
     optimizer = raw_model.configure_optimizers(
-        weight_decay=0.1, learning_rate=6e-4, device_type=device_type
+        weight_decay=args.weight_decay,
+        learning_rate=args.max_lr,
+        device_type=device_type
     )
 
     # create the log directory we will write checkpoints to and log to
-    log_dir = "log"
+    log_dir = args.log_dir if args.log_dir is not None else f"log_{args.mlp_act}"    
     os.makedirs(log_dir, exist_ok=True)
     log_file = os.path.join(log_dir, f"log.txt")
-    with open(log_file, "w") as f:  # open for writing to clear the file
+    with open(log_file, "w") as f: # open for writing to clear the file
         pass
 
     for step in range(max_steps):
         t0 = time.time()
-        last_step = step == max_steps - 1
+        last_step = (step == max_steps - 1)
 
         # once in a while evaluate our validation loss
         if step % 250 == 0 or last_step:
@@ -471,17 +519,17 @@ if __name__ == "__main__":
                     # optionally write model checkpoints
                     checkpoint_path = os.path.join(log_dir, f"model_{step:05d}.pt")
                     checkpoint = {
-                        "model": raw_model.state_dict(),
-                        "config": raw_model.config,
-                        "step": step,
-                        "val_loss": val_loss_accum.item(),
+                        'model': raw_model.state_dict(),
+                        'config': raw_model.config,
+                        'step': step,
+                        'val_loss': val_loss_accum.item()
                     }
                     # you might also want to add optimizer.state_dict() and
                     # rng seeds etc., if you wanted to more exactly resume training
                     torch.save(checkpoint, checkpoint_path)
 
         # once in a while evaluate hellaswag
-        if (step % 250 == 0 or last_step) and (not use_compile):
+        if (not args.skip_hellaswag) and (step % 250 == 0 or last_step) and (not use_compile):
             num_correct_norm = 0
             num_total = 0
             for i, example in enumerate(iterate_examples("val")):
@@ -502,23 +550,19 @@ if __name__ == "__main__":
             # reduce the stats across all processes
             if ddp:
                 num_total = torch.tensor(num_total, dtype=torch.long, device=device)
-                num_correct_norm = torch.tensor(
-                    num_correct_norm, dtype=torch.long, device=device
-                )
+                num_correct_norm = torch.tensor(num_correct_norm, dtype=torch.long, device=device)
                 dist.all_reduce(num_total, op=dist.ReduceOp.SUM)
                 dist.all_reduce(num_correct_norm, op=dist.ReduceOp.SUM)
                 num_total = num_total.item()
                 num_correct_norm = num_correct_norm.item()
             acc_norm = num_correct_norm / num_total
             if master_process:
-                print(
-                    f"HellaSwag accuracy: {num_correct_norm}/{num_total}={acc_norm:.4f}"
-                )
+                print(f"HellaSwag accuracy: {num_correct_norm}/{num_total}={acc_norm:.4f}")
                 with open(log_file, "a") as f:
                     f.write(f"{step} hella {acc_norm:.4f}\n")
 
         # once in a while generate from the model (except step 0, which is noise)
-        if ((step > 0 and step % 250 == 0) or last_step) and (not use_compile):
+        if (not args.skip_generate) and ((step > 0 and step % 250 == 0) or last_step) and (not use_compile):
             model.eval()
             num_return_sequences = 4
             max_length = 32
@@ -564,7 +608,7 @@ if __name__ == "__main__":
             x, y = x.to(device), y.to(device)
             # added after video, this field is also used by the forward pass.
             if ddp:
-                model.require_backward_grad_sync = micro_step == grad_accum_steps - 1
+                model.require_backward_grad_sync = (micro_step == grad_accum_steps - 1)
             with torch.autocast(device_type=device_type, dtype=torch.bfloat16):
                 logits, loss = model(x, y)
             # we have to scale the loss to account for gradient accumulation,

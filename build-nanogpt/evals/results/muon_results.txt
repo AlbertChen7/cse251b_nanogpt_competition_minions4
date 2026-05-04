@@ -1,0 +1,16 @@
+python ../evaluate.py --model_dir ./evals/  --data ../val.bin
+
+--- Evaluating local model: ./evals/ ---
+Loading model from ./evals/checkpoint.pt...
+Loading checkpoint from ./evals/checkpoint.pt...
+Total parameters:       39,418,880
+Trainable parameters:   39,418,880
+Evaluating on ../val.bin (block_size=1024)...
+
+==================================================
+  Perplexity:          39.4372
+  Avg loss (nats):     3.674711
+  Tokens evaluated:    5,169,152
+  Total parameters:    39,418,880
+  Eval time:           17.6s
+==================================================

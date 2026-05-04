@@ -1,5 +1,12 @@
 import torch
-from train_gpt2 import GPT, GPTConfig
+
+import sys
+import os
+
+# Adds the parent directory to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from train_muon_gpt import GPT, GPTConfig
 import __main__
 
 class NanoGPTAdapter(torch.nn.Module):

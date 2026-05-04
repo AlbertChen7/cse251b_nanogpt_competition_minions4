@@ -1,0 +1,16 @@
+python evaluate.py --model_dir build-nanogpt/evals/ --data val.bin
+
+--- Evaluating local model: build-nanogpt/evals/ ---
+Loading model from build-nanogpt/evals/checkpoint.pt...
+Loading checkpoint from build-nanogpt/evals/checkpoint.pt...
+Total parameters:       39,131,648
+Trainable parameters:   39,131,648
+Evaluating on val.bin (block_size=1024)...
+
+==================================================
+  Perplexity:          37.7434
+  Avg loss (nats):     3.630810
+  Tokens evaluated:    5,169,152
+  Total parameters:    39,418,880
+  Eval time:           15.0s
+==================================================

@@ -1,3 +1,6 @@
+# requirements for remote machine
+remote_req.txt
+
 # pyenv
 .python-version
 

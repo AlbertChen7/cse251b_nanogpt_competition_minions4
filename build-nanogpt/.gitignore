@@ -2,5 +2,6 @@
 edu_fineweb10B*
 
 # out
-/log
+log/
 *.pt
+checkpoints/

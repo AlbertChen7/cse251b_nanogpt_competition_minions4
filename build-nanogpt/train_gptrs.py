@@ -164,15 +164,30 @@ class Block(nn.Module):
         return x
 
 
+# @dataclass
+# class GPTConfig:
+#     block_size: int = 1024  # max sequence length
+#     vocab_size: int = (
+#         50257  # number of tokens: 50,000 BPE merges + 256 bytes tokens + 1 <|endoftext|> token
+#     )
+#     n_layer: int = 4  # number of layers
+#     n_head: int = 4  # number of heads
+#     n_embd: int = 512  # embedding dimension
+
+#     # architecture toggles for rope + swiglu. defaults match a fresh run;
+#     # from_pretrained() overrides them so hugging face gpt-2 weights still load.
+#     use_rope: bool = True
+#     rope_base: float = 10000.0
+#     mlp_type: str = "swiglu"  # "swiglu" or "gelu"
 @dataclass
 class GPTConfig:
     block_size: int = 1024  # max sequence length
     vocab_size: int = (
         50257  # number of tokens: 50,000 BPE merges + 256 bytes tokens + 1 <|endoftext|> token
     )
-    n_layer: int = 4  # number of layers
-    n_head: int = 4  # number of heads
-    n_embd: int = 512  # embedding dimension
+    n_layer: int = 8  # number of layers
+    n_head: int = 12  # number of heads
+    n_embd: int = 768  # embedding dimension
 
     # architecture toggles for rope + swiglu. defaults match a fresh run;
     # from_pretrained() overrides them so hugging face gpt-2 weights still load.
@@ -432,8 +447,15 @@ def get_most_likely_row(tokens, mask, logits):
 from torch.distributed import init_process_group, destroy_process_group
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.distributed as dist
+import argparse
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Specify checkpoint if want to resume training')
+    parser.add_argument("--checkpoint_path", help="If checkpoint file specified, begin training from checkpoint")
+    
+    args = parser.parse_args()
+    if not args.checkpoint_path:
+        args.checkpoint_path = ""
     # set up DDP (distributed data parallel).
     # torchrun command sets the env variables RANK, LOCAL_RANK, and WORLD_SIZE
     ddp = int(os.environ.get("RANK", -1)) != -1  # is this a ddp run?
@@ -531,6 +553,51 @@ if __name__ == "__main__":
     optimizer = raw_model.configure_optimizers(
         weight_decay=0.1, learning_rate=6e-4, device_type=device_type
     )
+    
+    start_step = 0
+    # checkpoint_path = os.path.join("log", args.checkpoint_path)
+
+    if os.path.exists(args.checkpoint_path):
+        if master_process:
+            print(f"Found checkpoint! Resuming from: {args.checkpoint_path}")
+        
+        # Load checkpoint matching your current GPU device setup
+        checkpoint = torch.load(args.checkpoint_path, map_location=device)
+        
+        # 1. Restore the model weights
+        raw_model.load_state_dict(checkpoint["model"])
+        
+        # 2. Restore optimizer states if available (safeguarded for this first time)
+        if "optimizer" in checkpoint:
+            optimizer.load_state_dict(checkpoint["optimizer"])
+        elif master_process:
+            print("Warning: No optimizer state found in checkpoint. Expect a brief loss spike.")
+            
+        # 3. Read what step we were on
+        start_step = checkpoint["step"] + 1 # Start on step 15001
+        
+        # 4. Fast-forward the training data loader to prevent reading repeated data
+        # Calculate exactly how many tokens were read globally prior to the crash
+        tokens_per_step = train_loader.B * train_loader.T * grad_accum_steps * ddp_world_size
+        total_tokens_processed = checkpoint["step"] * tokens_per_step
+        my_tokens_processed = total_tokens_processed // ddp_world_size
+    
+        shard_size = len(train_loader.tokens)
+        
+        # FIX: Corrected the 'tshard_size' typo here
+        train_loader.current_shard = int(my_tokens_processed // shard_size)
+        train_loader.current_position = int(my_tokens_processed % shard_size)
+        
+        # FIX: Force load the correct shard file into the loader array memory
+        if hasattr(train_loader, "shards") and len(train_loader.shards) > 0:
+            shard_to_load = train_loader.shards[train_loader.current_shard]
+            train_loader.tokens = np.load(shard_to_load)
+        
+        if master_process:
+            print(f"Data loader advanced to Shard: {train_loader.current_shard}, Position: {train_loader.current_position}")
+    else:
+        if master_process:
+            print("No checkpoint found at step 15000. Starting fresh from step 0.")
 
     # create the log directory we will write checkpoints to and log to
     log_dir = "log"
@@ -539,7 +606,7 @@ if __name__ == "__main__":
     with open(log_file, "w") as f:  # open for writing to clear the file
         pass
 
-    for step in range(max_steps):
+    for step in range(start_step, max_steps):
         t0 = time.time()
         last_step = step == max_steps - 1
 
@@ -568,6 +635,7 @@ if __name__ == "__main__":
                     checkpoint_path = os.path.join(log_dir, f"model_{step:05d}.pt")
                     checkpoint = {
                         "model": raw_model.state_dict(),
+                        "optimizer": optimizer.state_dict(),
                         "config": raw_model.config,
                         "step": step,
                         "val_loss": val_loss_accum.item(),

@@ -4,6 +4,7 @@ import time
 import inspect
 from dataclasses import dataclass
 import torch
+from torch import Tensor
 import torch.nn as nn
 from torch.nn import functional as F
 from hellaswag import render_example, iterate_examples
@@ -52,6 +53,8 @@ class RotaryEmbedding(nn.Module):
         k_rot = (k * cos) + (self._rotate_half(k) * sin)
         return q_rot, k_rot
 
+def norm(x: Tensor):
+    return F.rms_norm(x, (x.size(-1),))
 
 class CausalSelfAttention(nn.Module):
 
@@ -83,14 +86,6 @@ class CausalSelfAttention(nn.Module):
             
         # qk-norm
         self.qk_norm = getattr(config, "qk_norm", True)
-        if self.qk_norm:
-            head_dim = config.n_embd // config.n_head
-            self.q_norm = nn.RMSNorm(head_dim, eps=1e-6)
-            self.q_norm.to(torch.bfloat16)
-            self.k_norm = nn.RMSNorm(head_dim, eps=1e-6)
-            self.k_norm.to(torch.bfloat16)
-        else:
-            self.q_norm, self.k_norm = None, None
 
     def forward(self, x):
         B, T, C = (
@@ -111,8 +106,8 @@ class CausalSelfAttention(nn.Module):
             1, 2
         )  # (B, nh, T, hs)
         # qk-norm
-        if self.q_norm is not None and self.k_norm is not None:
-            q, k = self.q_norm(q), self.k_norm(k)
+        if self.qk_norm:
+            q, k = norm(q), norm(k)
         # apply rope to q and k before attention; v is not rotated
         if self.rotary_emb is not None:
             q, k = self.rotary_emb(q, k, seq_len=T)
@@ -178,15 +173,31 @@ class Block(nn.Module):
         return x
 
 
+# @dataclass
+# class GPTConfig:
+#     block_size: int = 1024  # max sequence length
+#     vocab_size: int = (
+#         50257  # number of tokens: 50,000 BPE merges + 256 bytes tokens + 1 <|endoftext|> token
+#     )
+#     n_layer: int = 4  # number of layers
+#     n_head: int = 4  # number of heads
+#     n_embd: int = 512  # embedding dimension
+
+#     # architecture toggles for rope + swiglu. defaults match a fresh run;
+#     # from_pretrained() overrides them so hugging face gpt-2 weights still load.
+#     use_rope: bool = True
+#     rope_base: float = 10000.0
+#     mlp_type: str = "swiglu"  # "swiglu" or "gelu"
+#     qk_norm: bool = True
 @dataclass
 class GPTConfig:
     block_size: int = 1024  # max sequence length
     vocab_size: int = (
         50257  # number of tokens: 50,000 BPE merges + 256 bytes tokens + 1 <|endoftext|> token
     )
-    n_layer: int = 4  # number of layers
-    n_head: int = 4  # number of heads
-    n_embd: int = 512  # embedding dimension
+    n_layer: int = 8  # number of layers
+    n_head: int = 12  # number of heads
+    n_embd: int = 768  # embedding dimension
 
     # architecture toggles for rope + swiglu. defaults match a fresh run;
     # from_pretrained() overrides them so hugging face gpt-2 weights still load.
@@ -510,6 +521,10 @@ if __name__ == "__main__":
     # create model
     model = GPT(GPTConfig(vocab_size=50304))
     # model = GPT.from_pretrained("gpt2") # or init from OpenAI GPT-2
+    # total_params = sum(p.numel() for p in model.parameters())
+    # trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    # print(f"Total parameters:     {total_params:>12,}")
+    # print(f"Trainable parameters: {trainable_params:>12,}")
     model.to(device)
     use_compile = (
         False  # torch.compile interferes with HellaSwag eval and Generation. TODO fix

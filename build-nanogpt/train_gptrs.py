@@ -564,19 +564,19 @@ if __name__ == "__main__":
         # Load checkpoint matching your current GPU device setup
         checkpoint = torch.load(args.checkpoint_path, map_location=device)
         
-        # 1. Restore the model weights
+        # Restore the model weights
         raw_model.load_state_dict(checkpoint["model"])
         
-        # 2. Restore optimizer states if available (safeguarded for this first time)
+        # Restore optimizer states if available
         if "optimizer" in checkpoint:
             optimizer.load_state_dict(checkpoint["optimizer"])
         elif master_process:
             print("Warning: No optimizer state found in checkpoint. Expect a brief loss spike.")
             
-        # 3. Read what step we were on
+        # Read last checkpoint step
         start_step = checkpoint["step"] + 1 # Start on step 15001
         
-        # 4. Fast-forward the training data loader to prevent reading repeated data
+        # Fast-forward the training data loader to prevent reading repeated data
         # Calculate exactly how many tokens were read globally prior to the crash
         tokens_per_step = train_loader.B * train_loader.T * grad_accum_steps * ddp_world_size
         total_tokens_processed = checkpoint["step"] * tokens_per_step
@@ -584,14 +584,23 @@ if __name__ == "__main__":
     
         shard_size = len(train_loader.tokens)
         
-        # FIX: Corrected the 'tshard_size' typo here
         train_loader.current_shard = int(my_tokens_processed // shard_size)
         train_loader.current_position = int(my_tokens_processed % shard_size)
         
-        # FIX: Force load the correct shard file into the loader array memory
+        # Force load the correct shard file into the loader array memory
+        # if hasattr(train_loader, "shards") and len(train_loader.shards) > 0:
+        #     shard_to_load = train_loader.shards[train_loader.current_shard]
+        #     train_loader.tokens = np.load(shard_to_load)
         if hasattr(train_loader, "shards") and len(train_loader.shards) > 0:
-            shard_to_load = train_loader.shards[train_loader.current_shard]
-            train_loader.tokens = np.load(shard_to_load)
+            # Instead of np.load, use the loader's native routine if it has one (like load_shard)
+            if hasattr(train_loader, "load_shard"):
+                # If your class has a custom loading method, call it directly:
+                train_loader.load_shard(train_loader.shards[train_loader.current_shard])
+            else:
+                # Fallback: Call next_batch() exactly once to force the loader to initialize 
+                # its file buffers correctly, then manually roll back the position pointer.
+                _ = train_loader.next_batch()
+                train_loader.current_position = int(my_tokens_processed % shard_size)
         
         if master_process:
             print(f"Data loader advanced to Shard: {train_loader.current_shard}, Position: {train_loader.current_position}")

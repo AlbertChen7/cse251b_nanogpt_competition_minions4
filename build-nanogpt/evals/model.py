@@ -6,7 +6,7 @@ import os
 # Adds the parent directory to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from train_muon_gpt import GPT, GPTConfig
+from train_gpt_distill import GPT, GPTConfig
 import __main__
 
 class NanoGPTAdapter(torch.nn.Module):
@@ -42,10 +42,10 @@ def load_model(checkpoint_path: str, device: str = "cuda") -> torch.nn.Module:
     # ... (the rest of the code remains exactly the same) ...
     config = GPTConfig(
         block_size=1024,
-        vocab_size=50304, 
-        n_layer=4,        
-        n_head=4,         
-        n_embd=512        
+        vocab_size=50257, 
+        n_layer=12,        
+        n_head=10,         
+        n_embd=640        
     )
 
     # print(f"Loading checkpoint from {checkpoint_path}...")

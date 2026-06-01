@@ -767,27 +767,21 @@ if __name__ == "__main__":
                 model.require_backward_grad_sync = micro_step == grad_accum_steps - 1
 
             with torch.autocast(device_type=device_type, dtype=torch.bfloat16):
-                # Student forward
+                # forward passes
                 student_logits, student_ce_loss = model(x, y)
-                
-                # Teacher forward
                 with torch.no_grad():
                     teacher_logits, _ = teacher_model(x)
                 
-                # --- FIX: Flatten (B, T, Vocab) into (B*T, Vocab) to average per-token ---
                 B, T, V = student_logits.size()
                 
                 teacher_logits_flat = teacher_logits.view(B * T, V)
                 student_logits_flat = student_logits.view(B * T, V)
                 
-                # Knowledge Distillation Loss (KL Divergence)
+                # KL div
                 soft_targets = F.softmax(teacher_logits_flat / temp_kd, dim=-1)
                 soft_prob = F.log_softmax(student_logits_flat / temp_kd, dim=-1)
                 
-                # Now 'batchmean' correctly divides by B*T (Total Tokens)
                 kd_loss = F.kl_div(soft_prob, soft_targets, reduction='batchmean') * (temp_kd ** 2)
-                
-                # Combine standard Cross Entropy with Distillation Loss
                 loss = (1.0 - alpha_kd) * student_ce_loss + alpha_kd * kd_loss
 
             loss = loss / grad_accum_steps
@@ -799,7 +793,6 @@ if __name__ == "__main__":
             # # addition of gradients corresponds to a SUM in the objective, but
             # # instead of a SUM we want MEAN. Scale the loss here so it comes out right
             # loss = loss / grad_accum_steps
-
 
             loss_accum += loss.detach()
             loss.backward()

@@ -1,0 +1,35 @@
+5000 iterations:
+==================================================
+  Perplexity:          34.4544
+  Avg loss (nats):     3.539637
+  Tokens evaluated:    5,169,152
+  Total parameters:    95,346,176
+  Eval time:           37.9s
+==================================================
+
+10000 iterations:
+==================================================
+  Perplexity:          29.9628
+  Avg loss (nats):     3.399956
+  Tokens evaluated:    5,169,152
+  Total parameters:    95,346,176
+  Eval time:           37.9s
+==================================================
+
+15000 iterations:
+==================================================
+  Perplexity:          27.9045
+  Avg loss (nats):     3.328787
+  Tokens evaluated:    5,169,152
+  Total parameters:    95,346,176
+  Eval time:           37.9s
+==================================================
+
+19072 iterations:
+==================================================
+  Perplexity:          27.4566
+  Avg loss (nats):     3.312607
+  Tokens evaluated:    5,169,152
+  Total parameters:    95,346,176
+  Eval time:           37.9s
+==================================================

@@ -1,13 +1,17 @@
---- Evaluating local model: buildnanogpt ---
-Loading model from buildnanogpt/model_best.pt...
 Total parameters:       38,342,144
-Trainable parameters:   38,342,144
-Evaluating on val.bin (block_size=1024)...
 
-==================================================
-  Perplexity:          48.5105
-  Avg loss (nats):     3.881780
-  Tokens evaluated:    5,169,152
-  Total parameters:    38,342,144
-  Eval time:           836.9s
-==================================================
+5000 iterations:
+Perplexity:          44.0646
+Avg loss (nats):     3.785657
+
+10000 iterations:
+Perplexity:          39.3563
+Avg loss (nats):     3.672657
+
+15000 iterations:
+Perplexity:          36.4058
+Avg loss (nats):     3.594729
+
+19072 iterations:
+Perplexity:          35.6083
+Avg loss (nats):     3.572579

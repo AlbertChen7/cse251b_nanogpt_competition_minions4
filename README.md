@@ -2,7 +2,7 @@
 
 In this competition we aimed to train a GPT-style language model from scratch and achieve the lowest possible perplexity on a held-out evaluation set. We used Andrej Karpathy's build nanoGPT code as our starter implementation (https://github.com/karpathy/build-nanogpt). Our final model used RoPE and SwiGLU, inspired by this implementation (https://github.com/50s-zerotohero/nanoGPT-124M-RoPE-SwiGLU). 
 
-Our training scripts lie within the build-nanogpt folder. The 'albert' branch contains the script to train our ablation with Muon+Adam optimizer and QK-norm. The 'fardin' branch contains the script to train our distillation ablation.
+Our training scripts lie within the build-nanogpt folder, train_gptrs.py is the script we used to train our final model. The 'albert' branch contains the script to train our ablation with Muon+Adam optimizer and QK-norm. The 'fardin' branch contains the script to train our distillation ablation.
 
 <!-- Train the best language model you can. Lowest perplexity on our hidden test set wins.
 
